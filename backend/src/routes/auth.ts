@@ -1,8 +1,15 @@
 import { Router, Request, Response } from 'express';
 import passport from 'passport';
+import crypto from 'crypto';
 import { getMe, logout } from '../controllers/authController';
 import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
+
+function signUserId(userId: string): string {
+  const secret = process.env.SESSION_SECRET || 'change-me-in-production';
+  const sig = crypto.createHmac('sha256', secret).update(userId).digest('hex');
+  return `${userId}.${sig}`;
+}
 
 const router = Router();
 
@@ -44,7 +51,7 @@ router.post('/sync', async (req: Request, res: Response): Promise<void> => {
     }
 
     req.session.userId = user.id;
-    res.json(user);
+    res.json({ ...user, token: signUserId(user.id) });
   } catch (err) {
     console.error('Sync error:', err);
     res.status(500).json({ error: 'Failed to sync user' });
