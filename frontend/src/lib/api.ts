@@ -1,10 +1,20 @@
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+// Use Next.js API route proxy (/api/proxy → Railway) so cookies stay same-origin
+const BASE = typeof window !== 'undefined' ? '/api/proxy' : (process.env.BACKEND_URL || 'http://localhost:3001');
 
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: BASE,
   withCredentials: true,
+});
+
+// Attach stored auth token to every request
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('auth_token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 export interface PaginatedEmailResponse {

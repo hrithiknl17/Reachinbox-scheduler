@@ -67,7 +67,7 @@ export default function ComposeModal({ onClose, onSuccess, userEmail }: ComposeM
           }
         });
         if (!emails.length) { toast.error('No valid emails found'); return; }
-        setRecipients(prev => [...new Set([...prev, ...emails])]);
+        setRecipients(prev => Array.from(new Set([...prev, ...emails])));
         toast.success(`Added ${emails.length} recipient(s)`);
       },
       error: () => toast.error('Failed to parse CSV'),
@@ -175,7 +175,7 @@ export default function ComposeModal({ onClose, onSuccess, userEmail }: ComposeM
   }
 
   async function handleSubmit() {
-    const allRecipients = [...new Set([...recipients, ...parseRecipients(toInput)])];
+    const allRecipients = Array.from(new Set([...recipients, ...parseRecipients(toInput)]));
     if (!allRecipients.length) { toast.error('Add at least one recipient'); return; }
     if (!subject.trim()) { toast.error('Subject is required'); return; }
     if (!body.trim()) { toast.error('Body is required'); return; }
@@ -282,7 +282,7 @@ export default function ComposeModal({ onClose, onSuccess, userEmail }: ComposeM
                     if (e.key === 'Enter' || e.key === ',') {
                       e.preventDefault();
                       const parsed = parseRecipients(toInput);
-                      if (parsed.length) { setRecipients(prev => [...new Set([...prev, ...parsed])]); setToInput(''); }
+                      if (parsed.length) { setRecipients(prev => Array.from(new Set([...prev, ...parsed]))); setToInput(''); }
                     }
                   }}
                   placeholder="recipient@example.com"

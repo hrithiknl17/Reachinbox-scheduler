@@ -13,10 +13,12 @@ let mailtrapInboxId: number | null = null;
 
 async function getMailtrapInboxId(token: string): Promise<number> {
   if (mailtrapInboxId) return mailtrapInboxId;
-  const res = await fetch('https://sandbox.api.mailtrap.io/api/inboxes', {
-    headers: { 'Authorization': `Bearer ${token}` },
+  const res = await fetch('https://mailtrap.io/api/v1/inboxes', {
+    headers: { 'Api-Token': token },
   });
-  const data = await res.json() as any[];
+  const text = await res.text();
+  let data: any[];
+  try { data = JSON.parse(text); } catch { throw new Error(`Mailtrap inboxes error: ${text}`); }
   mailtrapInboxId = data[0]?.id;
   if (!mailtrapInboxId) throw new Error('No Mailtrap inbox found');
   return mailtrapInboxId;
@@ -25,17 +27,19 @@ async function getMailtrapInboxId(token: string): Promise<number> {
 async function sendViaMailtrap(toEmail: string, subject: string, body: string): Promise<void> {
   const token = process.env.MAILTRAP_TOKEN!;
   const inboxId = await getMailtrapInboxId(token);
-  const res = await fetch(`https://sandbox.api.mailtrap.io/api/send/${inboxId}`, {
+  const res = await fetch(`https://mailtrap.io/api/v1/inboxes/${inboxId}/messages`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      'Api-Token': token,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: { email: 'onb@demo.com', name: 'ONB Scheduler' },
-      to: [{ email: toEmail }],
-      subject,
-      html: body,
+      message: {
+        from: { email: 'onb@demo.com', name: 'ONB Scheduler' },
+        to: [{ email: toEmail }],
+        subject,
+        html: body,
+      }
     }),
   });
   if (!res.ok) {

@@ -37,7 +37,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (session?.user && !synced) {
       const user = session.user as any;
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/sync`, {
+      fetch(`/api/proxy/api/auth/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -47,7 +47,13 @@ export default function DashboardPage() {
           name: user.name,
           avatar: user.image,
         }),
-      }).then(() => setSynced(true));
+      }).then(async (res) => {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.token) localStorage.setItem('auth_token', data.token);
+        }
+        setSynced(true);
+      });
     }
   }, [session, synced]);
 

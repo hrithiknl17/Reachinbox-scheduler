@@ -16,7 +16,7 @@ export function useEmails(type: 'scheduled' | 'sent') {
       const res = type === 'scheduled'
         ? await emailApi.getScheduled()
         : await emailApi.getSent();
-      setEmails(res.data);
+      setEmails(res.data.emails);
     } catch (err) {
       const msg = 'Failed to load emails';
       setError(msg);
