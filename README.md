@@ -265,3 +265,9 @@ This is clean and reliable. No custom `setTimeout` loops, no Redis polling hacks
 - **202 for bulk scheduling** — The API responds in ~10ms regardless of batch size. Processing happens in the background so clients aren't blocked.
 - **Session bridging** — NextAuth (frontend) and Express sessions (backend) are separate systems, connected via `/api/auth/sync`. A signed HMAC token is used to verify identity on API calls.
 - **Next.js proxy** — All API calls from the browser go through a Next.js API route (`/api/proxy`) that forwards to Railway. This avoids cross-domain cookie issues with Chrome's third-party cookie restrictions.
+
+---
+
+## Note
+
+Most of this assignment was written by me, with some help from AI tools during development. If there is anything you'd like me to walk through or explain in more detail, feel free to reach out at **nlhrithik123@gmail.com**.
