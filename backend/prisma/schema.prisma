@@ -1,0 +1,44 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  googleId    String   @unique
+  email       String   @unique
+  name        String
+  avatar      String?
+  createdAt   DateTime @default(now())
+  emails      Email[]
+}
+
+model Email {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id])
+  fromEmail     String
+  toEmail       String
+  subject       String
+  body          String      @db.Text
+  attachments   Json?       // stores [{filename, contentType, size}] — base64 data lives in BullMQ job only
+  previewUrl    String?     // Ethereal preview URL populated after sending
+  status        EmailStatus @default(SCHEDULED)
+  scheduledAt   DateTime
+  sentAt        DateTime?
+  failureReason String?
+  bullJobId     String?     @unique
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+enum EmailStatus {
+  SCHEDULED
+  SENT
+  FAILED
+  CANCELLED
+}
