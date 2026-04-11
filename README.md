@@ -1,28 +1,46 @@
 # ONB — Email Scheduler
 
-A production-grade bulk email scheduling system built for the ReachInbox assignment.
-Schedule thousands of cold emails with rate limiting, persistence across restarts, and a live dashboard.
+A production-grade bulk email scheduling system built for the ReachInbox hiring assignment. Schedule emails to hundreds of recipients, control send timing, and watch them land in real inboxes — all from a clean dashboard.
+
+**Live Demo:** https://reachinbox-scheduler-six.vercel.app
 
 ---
 
-## Demo Video
+## What It Does
 
-> See the landing page hero or `/frontend/public/onb.mp4` for a full walkthrough.
+You log in with Google, compose an email, pick a list of recipients (paste or upload CSV), set a start time and delay between sends, and hit Schedule. The system queues every email individually in BullMQ, fires them at the right time, and marks them sent in the dashboard. You can cancel individual emails, stop an entire campaign, or reschedule everything to a new time.
+
+Emails are delivered via **Brevo** (transactional email API) — they actually land in the recipient's real inbox, not a fake test inbox.
 
 ---
 
-## Quick Start
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 14, Tailwind CSS, NextAuth.js |
+| Backend | Node.js, Express, TypeScript |
+| Queue | BullMQ (backed by Redis) |
+| Database | PostgreSQL via Prisma |
+| Email Delivery | Brevo transactional email API |
+| Auth | Google OAuth (NextAuth + Passport.js) |
+| Hosting | Vercel (frontend) + Railway (backend + worker) |
+
+---
+
+## Running Locally
 
 ### Prerequisites
 
 - Node.js 18+
-- Docker (for PostgreSQL + Redis via Docker Compose)
+- Docker (for PostgreSQL + Redis)
 - Google OAuth credentials ([console.cloud.google.com](https://console.cloud.google.com))
+- Brevo account with a verified sender email ([app.brevo.com](https://app.brevo.com))
 
 ### 1. Clone & install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/hrithiknl17/Reachinbox-scheduler
 cd reachinbox-scheduler
 
 cd backend && npm install
@@ -41,8 +59,9 @@ docker compose up -d
 ```bash
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
-# Fill in values — see Environment Variables section below
 ```
+
+Fill in the values as described below.
 
 ### 4. Run database migrations
 
@@ -57,14 +76,14 @@ npx prisma generate
 ```bash
 cd backend
 npm run dev
-# Runs on http://localhost:3001
+# http://localhost:3001
 ```
 
-### 6. Start the BullMQ worker (separate terminal)
+### 6. Start the email worker (separate terminal)
 
 ```bash
 cd backend
-npx ts-node src/workers/emailWorker.ts
+npm run worker
 ```
 
 ### 7. Start the frontend
@@ -72,7 +91,7 @@ npx ts-node src/workers/emailWorker.ts
 ```bash
 cd frontend
 npm run dev
-# Runs on http://localhost:3000
+# http://localhost:3000
 ```
 
 ---
@@ -81,48 +100,44 @@ npm run dev
 
 ### Backend — `backend/.env`
 
-| Variable | Description | Example |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://postgres:password@localhost:5432/reachinbox` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
-| `SESSION_SECRET` | Express session secret (any random string) | `supersecret123` |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | From Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | From Google Cloud Console |
-| `FRONTEND_URL` | Frontend origin for CORS | `http://localhost:3000` |
-| `PORT` | Backend port | `3001` |
-| `WORKER_CONCURRENCY` | BullMQ worker concurrency | `5` |
-| `MAX_EMAILS_PER_HOUR` | Global rate limit per hour | `200` |
-| `MAX_EMAILS_PER_HOUR_PER_SENDER` | Per-sender rate limit per hour | `50` |
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string |
+| `SESSION_SECRET` | Any random secret string for sessions |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `FRONTEND_URL` | Frontend origin for CORS (e.g. `http://localhost:3000`) |
+| `BREVO_API_KEY` | Brevo API key for sending emails |
+| `PORT` | Backend port (default `3001`) |
 
 ### Frontend — `frontend/.env.local`
 
-| Variable | Description | Example |
-|---|---|---|
-| `NEXTAUTH_URL` | Full URL of the frontend | `http://localhost:3000` |
-| `NEXTAUTH_SECRET` | NextAuth secret (any random string) | `anothersecret456` |
-| `GOOGLE_CLIENT_ID` | Same Google OAuth client ID | From Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | Same Google OAuth client secret | From Google Cloud Console |
-| `NEXT_PUBLIC_API_URL` | Backend API base URL | `http://localhost:3001` |
-
-### Setting up Ethereal Email
-
-Ethereal is a fake SMTP service — emails are captured and never delivered to real inboxes.
-
-1. No manual setup required — the worker auto-creates a test account on first run via `nodemailer.createTestAccount()`
-2. After each email sends, a **preview URL** is saved to the database and shown in the dashboard
-3. Click **"Open in Ethereal"** on any sent email to see the full rendered email
-
-To use a fixed Ethereal account instead of auto-generating one:
-1. Go to [ethereal.email](https://ethereal.email) and create an account
-2. Add to `backend/.env`:
-```
-ETHEREAL_USER=your@ethereal.email
-ETHEREAL_PASS=yourpassword
-```
+| Variable | Description |
+|---|---|
+| `NEXTAUTH_URL` | Full URL of the frontend |
+| `NEXTAUTH_SECRET` | Any random secret string for NextAuth |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `BACKEND_URL` | Backend base URL (used by Next.js proxy) |
 
 ---
 
-## Architecture Overview
+## Email Delivery — Brevo
+
+In production, emails are sent via the **Brevo** transactional email API (HTTPS, no SMTP). This was chosen because Railway (where the backend runs) blocks outbound SMTP ports (587, 465). Brevo's HTTP API works around this cleanly.
+
+- Free tier: 300 emails/day
+- Sends to any real email address
+- Sender email (`nlhrithik123@gmail.com`) is verified on Brevo
+
+To use your own sender, verify your email at **app.brevo.com → Senders & IPs → Senders** and update the `sender.email` field in `backend/src/workers/emailWorker.ts`.
+
+For local development without Brevo, the worker falls back to Ethereal (fake SMTP) — emails are captured but not delivered.
+
+---
+
+## Architecture
 
 ### How Scheduling Works
 
@@ -130,111 +145,75 @@ ETHEREAL_PASS=yourpassword
 POST /api/emails/schedule
         │
         ▼
-  Returns 202 immediately (no client wait)
+  Returns 202 immediately
         │
         ▼  background via setImmediate
   processEmailBatch()
         │
-        ├── prisma.email.createMany()    ← batch DB insert in chunks of 100
+        ├── prisma.email.createMany()     ← batch DB insert (chunks of 100)
         │
-        └── emailQueue.addBulk()         ← batch Redis insert in chunks of 100
+        └── emailQueue.addBulk()          ← batch Redis insert (chunks of 100)
                 │
                 ▼
          BullMQ delayed job
-         (fires at scheduledAt time)
+         (fires at scheduledAt + delay offset per recipient)
                 │
                 ▼
-         emailWorker processes it
+         emailWorker picks it up
                 │
-                ├── sendMail() via Nodemailer + Ethereal
+                ├── Brevo API → real inbox delivery
                 │
-                └── prisma.email.update({ status: SENT, previewUrl })
+                └── prisma.email.update({ status: SENT })
 ```
 
-Each email gets a deterministic `jobId` (`email-{uuid}`) as an **idempotency key** — BullMQ will never enqueue a duplicate even if the server crashes mid-batch and restarts.
+Each email gets a deterministic `jobId` (`email-{uuid}`) as an idempotency key — BullMQ will never enqueue a duplicate even if the server crashes mid-batch.
 
-### How Persistence on Restart Works
+### Persistence on Restart
 
-BullMQ stores all jobs in **Redis**, not in memory. When the server or worker restarts:
+BullMQ stores all jobs in Redis, not in memory. When the backend or worker restarts:
 
-- **Delayed jobs** (not yet due) remain in Redis and fire at their scheduled time
-- **Active jobs** (mid-processing) are retried automatically by the next worker instance
-- **Completed/Failed** jobs remain in Redis for audit
-- PostgreSQL is the source of truth for email status — the worker updates it on completion
+- Delayed jobs not yet due stay in Redis and fire on time
+- Active jobs mid-processing are retried by the next worker instance
+- PostgreSQL is the source of truth for email status
 
-**Result:** Restarting the server or worker at any point causes zero email loss.
+Restarting at any point causes zero email loss.
 
-### How Rate Limiting & Concurrency Work
+### Rate Limiting
 
-**Layer 1 — BullMQ built-in limiter** (worker-level throughput):
+**BullMQ built-in limiter** — enforces max throughput at the worker level:
 ```
 limiter: { max: 10, duration: 2000ms }
+→ Max 10 emails processed every 2 seconds
 ```
-Throttles job processing globally — max 10 emails per 2 seconds regardless of concurrency.
 
-**Layer 2 — Atomic Lua script** (Redis, per-sender hourly cap):
-```lua
--- Single atomic Redis operation — no race conditions under concurrency
-if globalCount >= globalMax or senderCount >= senderMax then
-  return 0  -- reject
-end
-INCR globalKey   -- global hourly counter
-INCR senderKey   -- per-sender hourly counter
-return 1         -- allow
-```
-- Global cap: 200 emails/hour
-- Per-sender cap: 50 emails/hour
-- Counters keyed by hour window, auto-expire after 2 hours
-- Atomic execution prevents two concurrent workers from reading the same count simultaneously
-
-**Concurrency model:**
-```
-Worker concurrency : 5 (WORKER_CONCURRENCY)
-BullMQ limiter     : 10 jobs / 2000ms
-→ Smooth, controlled throughput with no setTimeout hacks
-```
+This is clean and reliable. No custom `setTimeout` loops, no Redis polling hacks.
 
 ---
 
-## Features Implemented
+## Features
 
 ### Backend
-
-| Feature | Detail |
-|---|---|
-| Email scheduling | `POST /api/emails/schedule` — 202 response, background processing |
-| BullMQ delayed jobs | `addBulk()` with per-email delay from `scheduledAt` |
-| Persistence on restart | Jobs stored in Redis; idempotency via `jobId` |
-| Rate limiting | BullMQ `limiter` + atomic Lua script in Redis |
-| Concurrency control | BullMQ `concurrency: 5` |
-| Bulk scheduling | `createMany` + `addBulk` in chunks of 100 — handles 1000+ emails |
-| Cancel single email | `DELETE /api/emails/:id` — removes BullMQ job + marks CANCELLED |
-| Cancel all scheduled | `DELETE /api/emails/cancel-all` — bulk remove |
-| Reschedule all | `POST /api/emails/reschedule-all` — re-queues with new start time, preserves spacing |
-| File attachments | Base64 in Redis job; metadata (name, size, type) stored in DB |
-| Ethereal preview URL | Saved to DB after send; shown in dashboard |
-| Google OAuth | Passport.js + `/api/auth/sync` bridges NextAuth ↔ Express session |
-| Session persistence | Redis-backed `express-session` via `connect-redis` |
-| Pagination | `limit` + `offset` on all list endpoints (max 200 per page) |
+- Schedule bulk emails — returns 202 instantly, processes in background
+- BullMQ delayed jobs with per-email timing offsets
+- Idempotency keys prevent duplicate processing on restart
+- Cancel a single email (removes BullMQ job + marks CANCELLED in DB)
+- Cancel all scheduled emails in one call
+- Reschedule all emails to a new start time (preserves spacing between sends)
+- File attachments (base64 encoded, up to 10MB total)
+- Pagination on all list endpoints
+- Google OAuth via Passport.js + NextAuth session bridge
 
 ### Frontend
-
-| Feature | Detail |
-|---|---|
-| Google OAuth login | NextAuth.js with Google provider |
-| Dashboard | Scheduled + Sent tabs with live counts |
-| Compose modal | Recipients (paste or CSV upload), subject, HTML body, attachments, send time, delay config |
-| CSV upload | Parses CSV, extracts email column, bulk-fills recipients field |
-| File attachments | Base64 encoded, up to 5MB/file, 10MB total, with chip previews |
-| Image insertion | URL-based or file upload → inserted as `<img>` in email body |
-| Email detail modal | Full rendered body, metadata, Ethereal preview link, attachment list |
-| Cancel email | Cancel button in detail modal (scheduled emails only) |
-| Stop Sending modal | Reschedule all to a new time (preserving spacing) or cancel all |
-| Filters | Status + date filters (today / this week / all time) |
-| Search | Client-side search across recipient, subject, body |
-| Load more | Paginated "Load more (N of total)" for large email lists |
-| Auto-refresh | After scheduling, switches to Scheduled tab and auto-refreshes |
-| Landing page | Demo video, features, testimonials, how-it-works, dot-grid background |
+- Google OAuth login
+- Compose modal with recipients (paste or CSV), subject, HTML body, attachments, send time, delay config
+- Scheduled and Sent tabs with live counts
+- Email detail modal with full body preview
+- Cancel button on individual scheduled emails
+- Stop Sending modal — reschedule or cancel all
+- Status and date filters
+- Search across recipient, subject, body
+- Load more pagination
+- Auto-refresh after scheduling
 
 ---
 
@@ -245,7 +224,7 @@ BullMQ limiter     : 10 jobs / 2000ms
 |---|---|---|
 | `GET` | `/api/auth/me` | Get current user |
 | `POST` | `/api/auth/sync` | Sync NextAuth session with backend |
-| `POST` | `/api/auth/logout` | Destroy session |
+| `POST` | `/api/auth/logout` | Logout |
 
 ### Emails
 | Method | Endpoint | Description |
@@ -255,9 +234,9 @@ BullMQ limiter     : 10 jobs / 2000ms
 | `GET` | `/api/emails/sent` | List sent/failed emails (paginated) |
 | `DELETE` | `/api/emails/cancel-all` | Cancel all scheduled emails |
 | `POST` | `/api/emails/reschedule-all` | Reschedule all to a new start time |
-| `DELETE` | `/api/emails/:id` | Cancel a single scheduled email |
+| `DELETE` | `/api/emails/:id` | Cancel a single email |
 
-#### `POST /api/emails/schedule` — request body
+#### Schedule request body
 ```json
 {
   "recipients": ["a@example.com", "b@example.com"],
@@ -265,7 +244,7 @@ BullMQ limiter     : 10 jobs / 2000ms
   "body": "<p>Hi there</p>",
   "scheduledAt": "2026-04-12T09:00:00.000Z",
   "delayBetweenMs": 2000,
-  "fromEmail": "optional@override.com",
+  "fromEmail": "you@example.com",
   "attachments": [
     {
       "filename": "doc.pdf",
@@ -279,11 +258,10 @@ BullMQ limiter     : 10 jobs / 2000ms
 
 ---
 
-## Assumptions & Trade-offs
+## Trade-offs & Decisions
 
-- **Ethereal Email is intentional** — The spec requires fake SMTP. Swapping to a real provider (SendGrid, Resend) requires only changing `getTransporter()` in `backend/src/config/ethereal.ts`.
-- **Base64 attachments in Redis** — Keeps the database lean. Trade-off: large attachments consume Redis memory. In production, attachments would go to S3 with a presigned URL stored in the job.
-- **202 response for bulk scheduling** — The API returns immediately and processes in the background. A 1000-email batch responds in ~10ms instead of waiting for all DB inserts.
-- **No email deduplication across campaigns** — The same recipient can appear in multiple campaigns. Deduplication would require a campaign/list concept.
-- **Session bridging** — NextAuth (frontend) and Express sessions (backend) are separate systems, bridged via `/api/auth/sync`. In production, a unified auth solution would be cleaner.
-- **Rate limiting advisory at scheduling time** — The worker's BullMQ `limiter` is the enforced throughput cap. The Lua-based hourly rate limiter is implemented and available but decoupled from the worker to avoid Redis lock expiry issues under high concurrency.
+- **Brevo over Ethereal in production** — Railway blocks SMTP. Brevo uses HTTPS so it works everywhere. Switching providers only requires changing `sendViaBrevo()` in `emailWorker.ts`.
+- **Base64 attachments in Redis** — Keeps the DB lean. In production at scale, attachments would go to S3 with a presigned URL in the job payload.
+- **202 for bulk scheduling** — The API responds in ~10ms regardless of batch size. Processing happens in the background so clients aren't blocked.
+- **Session bridging** — NextAuth (frontend) and Express sessions (backend) are separate systems, connected via `/api/auth/sync`. A signed HMAC token is used to verify identity on API calls.
+- **Next.js proxy** — All API calls from the browser go through a Next.js API route (`/api/proxy`) that forwards to Railway. This avoids cross-domain cookie issues with Chrome's third-party cookie restrictions.
