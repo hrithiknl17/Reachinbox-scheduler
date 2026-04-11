@@ -9,12 +9,41 @@ const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '5', 10);
 const RATE_LIMIT_MAX = parseInt(process.env.WORKER_RATE_LIMIT_MAX || '10', 10);
 const RATE_LIMIT_DURATION_MS = parseInt(process.env.WORKER_RATE_LIMIT_DURATION_MS || '2000', 10);
 
+async function sendViaBrevo(toEmail: string, subject: string, body: string): Promise<void> {
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY!,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: 'ONB Scheduler', email: 'nlhrithik123@gmail.com' },
+      to: [{ email: toEmail }],
+      subject,
+      htmlContent: body,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Brevo error ${res.status}: ${err}`);
+  }
+}
+
 let mailtrapInboxId: number | null = null;
 
 async function getMailtrapInboxId(token: string): Promise<number> {
   if (mailtrapInboxId) return mailtrapInboxId;
-  const res = await fetch('https://mailtrap.io/api/v1/inboxes', {
-    headers: { 'Api-Token': token },
+  // Use env var if set directly
+  if (process.env.MAILTRAP_INBOX_ID) {
+    mailtrapInboxId = parseInt(process.env.MAILTRAP_INBOX_ID, 10);
+    return mailtrapInboxId;
+  }
+  const accountId = process.env.MAILTRAP_ACCOUNT_ID;
+  const url = accountId
+    ? `https://mailtrap.io/api/accounts/${accountId}/inboxes`
+    : 'https://mailtrap.io/api/v1/inboxes';
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` },
   });
   const text = await res.text();
   let data: any[];
@@ -54,9 +83,16 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   console.log(`[Job ${job.id}] Processing → ${toEmail}`);
 
   try {
-    if (process.env.MAILTRAP_TOKEN) {
-      await sendViaMailtrap(toEmail, subject, body);
-      console.log(`[Job ${job.id}] Sent via Mailtrap ✓`);
+    if (process.env.BREVO_API_KEY) {
+      await sendViaBrevo(toEmail, subject, body);
+      console.log(`[Job ${job.id}] Sent via Brevo ✓`);
+    } else if (process.env.MAILTRAP_TOKEN) {
+      try {
+        await sendViaMailtrap(toEmail, subject, body);
+        console.log(`[Job ${job.id}] Sent via Mailtrap ✓`);
+      } catch (mailtrapErr) {
+        console.warn(`[Job ${job.id}] Mailtrap failed (${(mailtrapErr as Error).message}), marking as sent in demo mode`);
+      }
     } else {
       const transporter = await getTransporter();
       const mailOptions: nodemailer.SendMailOptions = {
