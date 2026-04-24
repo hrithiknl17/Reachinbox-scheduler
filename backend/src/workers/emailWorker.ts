@@ -17,7 +17,7 @@ async function sendViaBrevo(toEmail: string, subject: string, body: string): Pro
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      sender: { name: 'ONB Scheduler', email: 'nlhrithik123@gmail.com' },
+      sender: { name: 'Hrithik N L', email: 'nlhrithik123@gmail.com' },
       to: [{ email: toEmail }],
       subject,
       htmlContent: body,
