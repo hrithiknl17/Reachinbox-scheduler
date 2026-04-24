@@ -9,7 +9,12 @@ const CONCURRENCY = parseInt(process.env.WORKER_CONCURRENCY || '5', 10);
 const RATE_LIMIT_MAX = parseInt(process.env.WORKER_RATE_LIMIT_MAX || '10', 10);
 const RATE_LIMIT_DURATION_MS = parseInt(process.env.WORKER_RATE_LIMIT_DURATION_MS || '2000', 10);
 
-async function sendViaBrevo(toEmail: string, subject: string, body: string): Promise<void> {
+async function sendViaBrevo(
+  toEmail: string,
+  subject: string,
+  body: string,
+  attachments?: { filename: string; base64: string; contentType: string }[],
+): Promise<void> {
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -20,7 +25,12 @@ async function sendViaBrevo(toEmail: string, subject: string, body: string): Pro
       sender: { name: 'Hrithik N L', email: 'nlhrithik123@gmail.com' },
       to: [{ email: toEmail }],
       subject,
+      textContent: body,
       htmlContent: body,
+      attachment: attachments?.map(att => ({
+        name: att.filename,
+        content: att.base64.split(',')[1] ?? att.base64,
+      })),
     }),
   });
   if (!res.ok) {
@@ -84,7 +94,7 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
 
   try {
     if (process.env.BREVO_API_KEY) {
-      await sendViaBrevo(toEmail, subject, body);
+      await sendViaBrevo(toEmail, subject, body, attachments);
       console.log(`[Job ${job.id}] Sent via Brevo ✓`);
     } else if (process.env.MAILTRAP_TOKEN) {
       try {
