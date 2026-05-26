@@ -24,7 +24,7 @@ Emails are delivered via **Brevo** (transactional email API) — they actually l
 | Database | PostgreSQL via Prisma |
 | Email Delivery | Brevo transactional email API |
 | Auth | Google OAuth (NextAuth + Passport.js) |
-| Hosting | Vercel (frontend) + Railway (backend + worker) |
+| Hosting | Vercel (frontend) + Render (backend + worker) |
 
 ---
 
@@ -125,7 +125,7 @@ npm run dev
 
 ## Email Delivery — Brevo
 
-In production, emails are sent via the **Brevo** transactional email API (HTTPS, no SMTP). This was chosen because Railway (where the backend runs) blocks outbound SMTP ports (587, 465). Brevo's HTTP API works around this cleanly.
+In production, emails are sent via the **Brevo** transactional email API (HTTPS, no SMTP). Brevo's HTTP API works cleanly on any host without requiring open SMTP ports.
 
 - Free tier: 300 emails/day
 - Sends to any real email address
@@ -260,11 +260,11 @@ This is clean and reliable. No custom `setTimeout` loops, no Redis polling hacks
 
 ## Trade-offs & Decisions
 
-- **Brevo over Ethereal in production** — Railway blocks SMTP. Brevo uses HTTPS so it works everywhere. Switching providers only requires changing `sendViaBrevo()` in `emailWorker.ts`.
+- **Brevo over Ethereal in production** — Brevo uses HTTPS so it works everywhere without SMTP port concerns. Switching providers only requires changing `sendViaBrevo()` in `emailWorker.ts`.
 - **Base64 attachments in Redis** — Keeps the DB lean. In production at scale, attachments would go to S3 with a presigned URL in the job payload.
 - **202 for bulk scheduling** — The API responds in ~10ms regardless of batch size. Processing happens in the background so clients aren't blocked.
 - **Session bridging** — NextAuth (frontend) and Express sessions (backend) are separate systems, connected via `/api/auth/sync`. A signed HMAC token is used to verify identity on API calls.
-- **Next.js proxy** — All API calls from the browser go through a Next.js API route (`/api/proxy`) that forwards to Railway. This avoids cross-domain cookie issues with Chrome's third-party cookie restrictions.
+- **Next.js proxy** — All API calls from the browser go through a Next.js API route (`/api/proxy`) that forwards to the backend. This avoids cross-domain cookie issues with Chrome's third-party cookie restrictions.
 
 ---
 
