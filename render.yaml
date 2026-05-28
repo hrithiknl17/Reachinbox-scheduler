@@ -9,7 +9,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3001
+        value: 10000
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL
@@ -23,32 +23,6 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: BACKEND_URL
-        sync: false
-      - key: BREVO_API_KEY
-        sync: false
-      - key: WORKER_CONCURRENCY
-        value: 5
-      - key: WORKER_RATE_LIMIT_MAX
-        value: 10
-      - key: WORKER_RATE_LIMIT_DURATION_MS
-        value: 2000
-      - key: MAX_EMAILS_PER_HOUR
-        value: 200
-      - key: MAX_EMAILS_PER_HOUR_PER_SENDER
-        value: 50
-
-  - type: worker
-    name: reachinbox-worker
-    runtime: node
-    rootDir: backend
-    buildCommand: npm install && npm run build && npx prisma generate
-    startCommand: node dist/workers/emailWorker.js
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
         sync: false
       - key: BREVO_API_KEY
         sync: false

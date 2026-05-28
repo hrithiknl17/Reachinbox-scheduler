@@ -8,6 +8,7 @@ import { prisma } from './config/database';
 import { redis } from './config/redis';
 import authRoutes from './routes/auth';
 import emailRoutes from './routes/emails';
+import { startWorker } from './workers/emailWorker';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -101,8 +102,18 @@ app.use('/api/emails', emailRoutes);
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Backend running on http://localhost:${PORT}`);
+});
+
+const emailWorker = startWorker();
+
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received — shutting down gracefully...');
+  server.close();
+  await emailWorker.close();
+  await prisma.$disconnect();
+  process.exit(0);
 });
 
 export default app;

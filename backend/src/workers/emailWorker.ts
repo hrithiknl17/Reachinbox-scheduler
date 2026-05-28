@@ -147,28 +147,29 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   }
 }
 
-const worker = new Worker<EmailJobData>('email-queue', processEmailJob, {
-  connection: redisForBullMQ,
-  concurrency: CONCURRENCY,
-  limiter: {
-    max: RATE_LIMIT_MAX,
-    duration: RATE_LIMIT_DURATION_MS,
-  },
-});
+export function startWorker(): Worker<EmailJobData> {
+  const worker = new Worker<EmailJobData>('email-queue', processEmailJob, {
+    connection: redisForBullMQ,
+    concurrency: CONCURRENCY,
+    limiter: {
+      max: RATE_LIMIT_MAX,
+      duration: RATE_LIMIT_DURATION_MS,
+    },
+  });
 
-worker.on('completed', job => {
-  console.log(`[Job ${job.id}] Completed`);
-});
+  worker.on('completed', job => {
+    console.log(`[Job ${job.id}] Completed`);
+  });
 
-worker.on('failed', (job, err) => {
-  console.error(`[Job ${job?.id}] Failed permanently: ${err.message}`);
-});
+  worker.on('failed', (job, err) => {
+    console.error(`[Job ${job?.id}] Failed permanently: ${err.message}`);
+  });
 
-worker.on('error', err => {
-  console.error('Worker error:', err);
-});
+  worker.on('error', err => {
+    console.error('Worker error:', err);
+  });
 
-console.log(`
+  console.log(`
 ╔══════════════════════════════════════╗
 ║       Email Worker Started           ║
 ╠══════════════════════════════════════╣
@@ -177,8 +178,15 @@ console.log(`
 ╚══════════════════════════════════════╝
 `);
 
-process.on('SIGTERM', async () => {
-  console.log('Shutting down worker gracefully...');
-  await worker.close();
-  process.exit(0);
-});
+  return worker;
+}
+
+// Standalone mode — `npm run worker` / `node dist/workers/emailWorker.js`
+if (require.main === module) {
+  const worker = startWorker();
+  process.on('SIGTERM', async () => {
+    console.log('Shutting down worker gracefully...');
+    await worker.close();
+    process.exit(0);
+  });
+}
